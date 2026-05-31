@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Ukol {
+  id            Int       @id @default(autoincrement())
+  nazev         String
+  popis         String?
+  stav          String    @default("novy")
+  lokace        String    @default("kdekoliv")
+  zdroj         String    @default("rucni")
+  zdrojId       String?
+  schvaleno     Boolean   @default(true)
+  priorita      String    @default("normalni")
+  deadline      DateTime?
+  vytvoreno     DateTime  @default(now())
+  aktualizovano DateTime  @updatedAt
+}
+
+model NavrhUkolu {
+  id        Int      @id @default(autoincrement())
+  nazev     String
+  popis     String?
+  lokace    String   @default("kdekoliv")
+  zdroj     String
+  zdrojId   String?
+  vytvoreno DateTime @default(now())
+}
+
+model SyncLog {
+  id         Int      @id @default(autoincrement())
+  cas        DateTime @default(now())
+  typ        String
+  vysledek   String
+  zprava     String?
+  noveNavrhy Int      @default(0)
+}
