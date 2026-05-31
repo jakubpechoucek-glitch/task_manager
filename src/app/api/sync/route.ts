@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { spustSync } from "@/lib/sync";
 
-// Placeholder pro Google + Claude sync — implementace po nastavení OAuth
 export async function POST() {
-  const log = await prisma.syncLog.create({
-    data: {
-      typ: "manual",
-      vysledek: "ok",
-      zprava: "Sync zatím není nakonfigurován. Nejdříve nastavte Google OAuth.",
-      noveNavrhy: 0,
-    },
-  });
-  return NextResponse.json(log);
+  const vysledek = await spustSync();
+  return NextResponse.json(vysledek);
 }
 
 export async function GET() {
