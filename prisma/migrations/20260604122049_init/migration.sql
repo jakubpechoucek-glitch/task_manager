@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "Ukol" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "nazev" TEXT NOT NULL,
     "popis" TEXT,
     "stav" TEXT NOT NULL DEFAULT 'novy',
@@ -9,28 +9,34 @@ CREATE TABLE "Ukol" (
     "zdrojId" TEXT,
     "schvaleno" BOOLEAN NOT NULL DEFAULT true,
     "priorita" TEXT NOT NULL DEFAULT 'normalni',
-    "deadline" DATETIME,
-    "vytvoreno" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "aktualizovano" DATETIME NOT NULL
+    "deadline" TIMESTAMP(3),
+    "vytvoreno" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "aktualizovano" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Ukol_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "NavrhUkolu" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL,
     "nazev" TEXT NOT NULL,
     "popis" TEXT,
     "lokace" TEXT NOT NULL DEFAULT 'kdekoliv',
     "zdroj" TEXT NOT NULL,
     "zdrojId" TEXT,
-    "vytvoreno" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "vytvoreno" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "NavrhUkolu_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
 CREATE TABLE "SyncLog" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "cas" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "id" SERIAL NOT NULL,
+    "cas" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "typ" TEXT NOT NULL,
     "vysledek" TEXT NOT NULL,
     "zprava" TEXT,
-    "noveNavrhy" INTEGER NOT NULL DEFAULT 0
+    "noveNavrhy" INTEGER NOT NULL DEFAULT 0,
+
+    CONSTRAINT "SyncLog_pkey" PRIMARY KEY ("id")
 );
