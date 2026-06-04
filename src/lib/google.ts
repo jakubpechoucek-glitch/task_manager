@@ -12,12 +12,16 @@ function getOAuthClient() {
   return oauth2Client;
 }
 
-export async function getNoveMailyCached(): Promise<{ id: string; subject: string; from: string; snippet: string; date: string }[]> {
+export async function getNoveMailyCached(dnu = 0): Promise<{ id: string; subject: string; from: string; snippet: string; date: string }[]> {
   const auth = getOAuthClient();
   const gmail = google.gmail({ version: "v1", auth });
 
   const od = new Date();
-  od.setHours(od.getHours() - 1);
+  if (dnu > 0) {
+    od.setDate(od.getDate() - dnu);
+  } else {
+    od.setHours(od.getHours() - 1);
+  }
   const query = `after:${Math.floor(od.getTime() / 1000)} -from:me`;
 
   const list = await gmail.users.messages.list({

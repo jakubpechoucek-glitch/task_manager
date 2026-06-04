@@ -17,6 +17,7 @@ export default function Dashboard() {
   const [modalOtevren, setModalOtevren] = useState(false);
   const [posledniSync, setPosledniSync] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [importujuHistorii, setImportujuHistorii] = useState(false);
 
   const nactiUkoly = useCallback(async () => {
     const params = new URLSearchParams();
@@ -46,6 +47,17 @@ export default function Dashboard() {
     nactiNavrhy();
     nactiSyncLog();
   }, [nactiUkoly, nactiNavrhy, nactiSyncLog]);
+
+  const handleImportHistorie = async (dnu: number) => {
+    setImportujuHistorii(true);
+    await fetch("/api/sync/historie", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dnu }),
+    });
+    await Promise.all([nactiNavrhy(), nactiSyncLog()]);
+    setImportujuHistorii(false);
+  };
 
   const handleSync = async () => {
     setSyncing(true);
@@ -126,6 +138,14 @@ export default function Dashboard() {
                 Sync: {posledniSync}
               </span>
             )}
+            <button
+              onClick={() => handleImportHistorie(45)}
+              disabled={importujuHistorii}
+              className="text-sm text-gray-600 hover:text-gray-900 border border-gray-300 px-3 py-1.5 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              title="Jednorázový import posledních 45 dní z Gmailu"
+            >
+              {importujuHistorii ? "⏳" : "📥"} Import historie
+            </button>
             <button
               onClick={handleSync}
               disabled={syncing}
