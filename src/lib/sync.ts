@@ -1,131 +1,162 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "./prisma";
-import { getNoveMailyCached, getNoveUdalostiKalendare } from "./google";
+import { getPrijateMaily, getOdeslaneMaily, getNoveUdalostiKalendare } from "./google";
 
 function getAnthropic() {
   return new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 }
 
-interface NavrhAI {
-  nazev: string;
-  popis: string;
-  lokace: "praha" | "manila" | "kdekoliv";
-  vytvorit: boolean;
+function parseJSON(raw: string) {
+  const text = raw.replace(/^```[a-z]*\n?/m, "").replace(/```\s*$/m, "").trim();
+  return JSON.parse(text);
 }
 
-async function analyzujMailem(maily: { id: string; subject: string; from: string; snippet: string; date: string }[]): Promise<{ zdrojId: string; navrh: NavrhAI }[]> {
+type Mail = { id: string; subject: string; from: string; to: string; snippet: string; date: string };
+type Udalost = { id: string; nazev: string; popis: string; zacatek: string };
+type NavrhVysledek = { zdrojId: string; nazev: string; popis: string; lokace: string; stav: string };
+
+async function analyzujPrijatyeMaily(maily: Mail[]): Promise<NavrhVysledek[]> {
   if (!maily.length) return [];
 
-  const prompt = `Jsi asistent pro správu úkolů. Analyzuj tyto emaily a rozhodni, zda každý z nich vyžaduje akci nebo úkol.
-
-Kontext: Uživatel žije střídavě v Manile (Filipíny) a v Praze (Česká republika). Úkoly které lze vyřešit jen osobně v ČR označ jako "praha", úkoly jen v Manile jako "manila", ostatní jako "kdekoliv".
+  const response = await getAnthropic().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 1024,
+    messages: [{
+      role: "user", content: `Analyzuj příchozí emaily a rozhodni, zda každý vyžaduje akci.
+Uživatel žije střídavě v Praze (ČR) a Manile (PH).
 
 Emaily:
 ${maily.map((m, i) => `[${i + 1}] Od: ${m.from}\nPředmět: ${m.subject}\nÚryvek: ${m.snippet}`).join("\n\n")}
 
-Pro každý email vrať JSON pole objektů:
-{
-  "index": číslo emailu (1-based),
-  "vytvorit": true/false (zda je potřeba akce),
-  "nazev": "stručný název úkolu",
-  "popis": "co konkrétně udělat",
-  "lokace": "praha" | "manila" | "kdekoliv"
+Vrať JSON pole (bez markdown):
+[{"index":1,"vytvorit":true/false,"nazev":"...","popis":"...","lokace":"praha"|"manila"|"kdekoliv"}]`
+    }],
+  });
+
+  const raw = response.content[0].type === "text" ? response.content[0].text : "[]";
+  const vysledky: { index: number; vytvorit: boolean; nazev: string; popis: string; lokace: string }[] = parseJSON(raw);
+
+  return vysledky
+    .filter((v) => v.vytvorit && maily[v.index - 1])
+    .map((v) => ({
+      zdrojId: maily[v.index - 1].id,
+      nazev: v.nazev,
+      popis: v.popis,
+      lokace: v.lokace,
+      stav: "novy",
+    }));
 }
 
-Vrať pouze JSON pole, nic jiného.`;
+async function analyzujOdeslaneMaily(maily: Mail[]): Promise<NavrhVysledek[]> {
+  if (!maily.length) return [];
 
   const response = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
+    messages: [{
+      role: "user", content: `Analyzuj odeslané emaily a rozhodni, zda uživatel čeká na odpověď nebo akci od druhé strany.
+Uživatel žije střídavě v Praze (ČR) a Manile (PH).
+
+Odeslané emaily:
+${maily.map((m, i) => `[${i + 1}] Komu: ${m.to}\nPředmět: ${m.subject}\nÚryvek: ${m.snippet}`).join("\n\n")}
+
+Vrať JSON pole (bez markdown) — jen maily kde uživatel čeká na odpověď nebo splnění:
+[{"index":1,"vytvorit":true/false,"nazev":"Čekám na odpověď od [jméno] — [téma]","popis":"...","lokace":"praha"|"manila"|"kdekoliv"}]`
+    }],
   });
 
   const raw = response.content[0].type === "text" ? response.content[0].text : "[]";
-  const text = raw.replace(/^```[a-z]*\n?/m, "").replace(/```\s*$/m, "").trim();
-  const vysledky: { index: number; vytvorit: boolean; nazev: string; popis: string; lokace: "praha" | "manila" | "kdekoliv" }[] = JSON.parse(text);
+  const vysledky: { index: number; vytvorit: boolean; nazev: string; popis: string; lokace: string }[] = parseJSON(raw);
 
   return vysledky
-    .filter((v) => v.vytvorit)
+    .filter((v) => v.vytvorit && maily[v.index - 1])
     .map((v) => ({
       zdrojId: maily[v.index - 1].id,
-      navrh: { nazev: v.nazev, popis: v.popis, lokace: v.lokace, vytvorit: true },
+      nazev: v.nazev,
+      popis: v.popis,
+      lokace: v.lokace,
+      stav: "cekam",
     }));
 }
 
-async function analyzujKalendar(udalosti: { id: string; nazev: string; popis: string; zacatek: string }[]): Promise<{ zdrojId: string; navrh: NavrhAI }[]> {
+async function analyzujKalendar(udalosti: Udalost[]): Promise<NavrhVysledek[]> {
   if (!udalosti.length) return [];
 
-  const prompt = `Jsi asistent pro správu úkolů. Analyzuj tyto události z kalendáře a rozhodni, zda každá vyžaduje přípravu nebo akci navíc.
-
-Kontext: Uživatel žije střídavě v Manile (Filipíny) a v Praze (Česká republika).
+  const response = await getAnthropic().messages.create({
+    model: "claude-haiku-4-5-20251001",
+    max_tokens: 1024,
+    messages: [{
+      role: "user", content: `Analyzuj události z kalendáře a rozhodni, zda každá vyžaduje přípravu nebo akci.
+Uživatel žije střídavě v Praze (ČR) a Manile (PH).
 
 Události:
 ${udalosti.map((u, i) => `[${i + 1}] Název: ${u.nazev}\nPopis: ${u.popis || "(prázdný)"}\nZačátek: ${u.zacatek}`).join("\n\n")}
 
-Pro každou událost vrať JSON pole objektů:
-{
-  "index": číslo události (1-based),
-  "vytvorit": true/false (zda je potřeba příprava/akce),
-  "nazev": "stručný název úkolu",
-  "popis": "co konkrétně připravit nebo udělat",
-  "lokace": "praha" | "manila" | "kdekoliv"
-}
-
-Vrať pouze JSON pole, nic jiného.`;
-
-  const response = await getAnthropic().messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
+Vrať JSON pole (bez markdown):
+[{"index":1,"vytvorit":true/false,"nazev":"...","popis":"...","lokace":"praha"|"manila"|"kdekoliv"}]`
+    }],
   });
 
   const raw = response.content[0].type === "text" ? response.content[0].text : "[]";
-  const text = raw.replace(/^```[a-z]*\n?/m, "").replace(/```\s*$/m, "").trim();
-  const vysledky: { index: number; vytvorit: boolean; nazev: string; popis: string; lokace: "praha" | "manila" | "kdekoliv" }[] = JSON.parse(text);
+  const vysledky: { index: number; vytvorit: boolean; nazev: string; popis: string; lokace: string }[] = parseJSON(raw);
 
   return vysledky
-    .filter((v) => v.vytvorit)
+    .filter((v) => v.vytvorit && udalosti[v.index - 1])
     .map((v) => ({
       zdrojId: udalosti[v.index - 1].id,
-      navrh: { nazev: v.nazev, popis: v.popis, lokace: v.lokace, vytvorit: true },
+      nazev: v.nazev,
+      popis: v.popis,
+      lokace: v.lokace,
+      stav: "novy",
     }));
+}
+
+async function getExistujiciZdrojIds(): Promise<Set<string>> {
+  const [navrhy, ukoly, ignorovane] = await Promise.all([
+    prisma.navrhUkolu.findMany({ select: { zdrojId: true } }),
+    prisma.ukol.findMany({ select: { zdrojId: true }, where: { zdrojId: { not: null } } }),
+    prisma.ignorovanyZdroj.findMany({ select: { zdrojId: true } }),
+  ]);
+  return new Set([
+    ...navrhy.map((n: { zdrojId: string | null }) => n.zdrojId),
+    ...ukoly.map((u: { zdrojId: string | null }) => u.zdrojId),
+    ...ignorovane.map((i: { zdrojId: string }) => i.zdrojId),
+  ].filter(Boolean) as string[]);
 }
 
 export async function spustSync(): Promise<{ noveNavrhy: number; chyba?: string }> {
   try {
-    const [maily, udalosti] = await Promise.all([
-      getNoveMailyCached(),
+    const [prijate, odeslane, udalosti, existujiciZdrojIds] = await Promise.all([
+      getPrijateMaily(),
+      getOdeslaneMaily(),
       getNoveUdalostiKalendare(),
+      getExistujiciZdrojIds(),
     ]);
 
-    // Zkontroluj zdrojId v návrzích, schválených úkolech i ignorovaných zdrojích
-    const [existujiciNavrhy, existujiciUkoly, ignorovane] = await Promise.all([
-      prisma.navrhUkolu.findMany({ select: { zdrojId: true } }),
-      prisma.ukol.findMany({ select: { zdrojId: true }, where: { zdrojId: { not: null } } }),
-      prisma.ignorovanyZdroj.findMany({ select: { zdrojId: true } }),
+    const nove = (maily: Mail[]) => maily.filter((m) => !existujiciZdrojIds.has(m.id));
+    const noveUdalosti = udalosti.filter((u) => !existujiciZdrojIds.has(u.id));
+
+    const [navrhyPrijate, navrhyOdeslane, navrhyKalendar] = await Promise.all([
+      analyzujPrijatyeMaily(nove(prijate)),
+      analyzujOdeslaneMaily(nove(odeslane)),
+      analyzujKalendar(noveUdalosti),
     ]);
 
-    const existujiciZdrojIds = new Set([
-      ...existujiciNavrhy.map((n: { zdrojId: string | null }) => n.zdrojId),
-      ...existujiciUkoly.map((u: { zdrojId: string | null }) => u.zdrojId),
-      ...ignorovane.map((i: { zdrojId: string }) => i.zdrojId),
-    ].filter(Boolean) as string[]);
-
-    const [navrhyMailu, navrhyKalendare] = await Promise.all([
-      analyzujMailem(maily.filter((m) => !existujiciZdrojIds.has(m.id))),
-      analyzujKalendar(udalosti.filter((u) => !existujiciZdrojIds.has(u.id))),
-    ]);
-
-    const vsechnyNavrhy = [...navrhyMailu, ...navrhyKalendare];
+    const vsechny = [
+      ...navrhyPrijate.map((n) => ({ ...n, zdroj: "gmail" })),
+      ...navrhyOdeslane.map((n) => ({ ...n, zdroj: "gmail" })),
+      ...navrhyKalendar.map((n) => ({ ...n, zdroj: "kalendar" })),
+    ];
 
     await Promise.all(
-      vsechnyNavrhy.map((n) =>
+      vsechny.map((n) =>
         prisma.navrhUkolu.create({
           data: {
-            nazev: n.navrh.nazev,
-            popis: n.navrh.popis,
-            lokace: n.navrh.lokace,
-            zdroj: navrhyMailu.includes(n) ? "gmail" : "kalendar",
+            nazev: n.nazev,
+            popis: n.popis,
+            lokace: n.lokace,
+            stav: n.stav,
+            zdroj: n.zdroj,
             zdrojId: n.zdrojId,
           },
         })
@@ -136,12 +167,12 @@ export async function spustSync(): Promise<{ noveNavrhy: number; chyba?: string 
       data: {
         typ: "auto",
         vysledek: "ok",
-        zprava: `Gmail: ${maily.length} mailů, Kalendář: ${udalosti.length} událostí`,
-        noveNavrhy: vsechnyNavrhy.length,
+        zprava: `Příchozí: ${prijate.length}, Odeslané: ${odeslane.length}, Kalendář: ${udalosti.length}`,
+        noveNavrhy: vsechny.length,
       },
     });
 
-    return { noveNavrhy: vsechnyNavrhy.length };
+    return { noveNavrhy: vsechny.length };
   } catch (e) {
     const zprava = e instanceof Error ? e.message : String(e);
     await prisma.syncLog.create({

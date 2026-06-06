@@ -23,6 +23,7 @@ export interface NavrhUkolu {
   nazev: string;
   popis: string | null;
   lokace: Lokace;
+  stav: Stav;
   zdroj: Zdroj;
   zdrojId: string | null;
   vytvoreno: string;

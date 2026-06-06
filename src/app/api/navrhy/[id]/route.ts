@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       lokace: data.lokace || navrh.lokace,
       zdroj: navrh.zdroj as "gmail" | "kalendar",
       zdrojId: navrh.zdrojId,
-      stav: "novy",
+      stav: navrh.stav || "novy",
       priorita: data.priorita || "normalni",
       schvaleno: true,
     },

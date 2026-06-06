@@ -27,6 +27,7 @@ model NavrhUkolu {
   nazev     String
   popis     String?
   lokace    String   @default("kdekoliv")
+  stav      String   @default("novy")
   zdroj     String
   zdrojId   String?
   vytvoreno DateTime @default(now())
