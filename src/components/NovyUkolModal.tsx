@@ -10,7 +10,7 @@ interface Props {
     lokace: string;
     priorita: string;
     deadline: string;
-  }) => void;
+  }) => Promise<void>;
 }
 
 export default function NovyUkolModal({ onClose, onUlozit }: Props) {
@@ -19,11 +19,17 @@ export default function NovyUkolModal({ onClose, onUlozit }: Props) {
   const [lokace, setLokace] = useState("kdekoliv");
   const [priorita, setPriority] = useState("normalni");
   const [deadline, setDeadline] = useState("");
+  const [ukladam, setUkladam] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nazev.trim()) return;
-    onUlozit({ nazev: nazev.trim(), popis, lokace, priorita, deadline });
+    if (!nazev.trim() || ukladam) return;
+    setUkladam(true);
+    try {
+      await onUlozit({ nazev: nazev.trim(), popis, lokace, priorita, deadline });
+    } finally {
+      setUkladam(false);
+    }
   };
 
   return (
@@ -113,10 +119,10 @@ export default function NovyUkolModal({ onClose, onUlozit }: Props) {
               </button>
               <button
                 type="submit"
-                disabled={!nazev.trim()}
-                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2 rounded-lg transition-colors text-sm"
+                disabled={!nazev.trim() || ukladam}
+                className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-medium py-2 rounded-lg transition-colors text-sm"
               >
-                Přidat úkol
+                {ukladam ? "Ukládám…" : "✓ Přidat úkol"}
               </button>
             </div>
           </form>

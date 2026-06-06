@@ -73,13 +73,22 @@ export default function Dashboard() {
     priorita: string;
     deadline: string;
   }) => {
-    await fetch("/api/ukoly", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    setModalOtevren(false);
-    await nactiUkoly();
+    try {
+      const res = await fetch("/api/ukoly", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        alert(`Chyba při ukládání: ${err}`);
+        return;
+      }
+      setModalOtevren(false);
+      await nactiUkoly();
+    } catch (e) {
+      alert(`Chyba připojení: ${e instanceof Error ? e.message : String(e)}`);
+    }
   };
 
   const handleUpdateUkol = async (id: number, data: Partial<Ukol>) => {
