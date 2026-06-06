@@ -98,11 +98,16 @@ export async function spustSync(): Promise<{ noveNavrhy: number; chyba?: string 
       getNoveUdalostiKalendare(),
     ]);
 
-    const existujiciZdrojIds = new Set(
-      (await prisma.navrhUkolu.findMany({ select: { zdrojId: true } }))
-        .map((n: { zdrojId: string | null }) => n.zdrojId)
-        .filter(Boolean) as string[]
-    );
+    // Zkontroluj zdrojId v návrzích I v již schválených úkolech
+    const [existujiciNavrhy, existujiciUkoly] = await Promise.all([
+      prisma.navrhUkolu.findMany({ select: { zdrojId: true } }),
+      prisma.ukol.findMany({ select: { zdrojId: true }, where: { zdrojId: { not: null } } }),
+    ]);
+
+    const existujiciZdrojIds = new Set([
+      ...existujiciNavrhy.map((n: { zdrojId: string | null }) => n.zdrojId),
+      ...existujiciUkoly.map((u: { zdrojId: string | null }) => u.zdrojId),
+    ].filter(Boolean) as string[]);
 
     const [navrhyMailu, navrhyKalendare] = await Promise.all([
       analyzujMailem(maily.filter((m) => !existujiciZdrojIds.has(m.id))),

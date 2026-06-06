@@ -17,11 +17,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ noveNavrhy: 0, zprava: "Žádné maily nenalezeny" });
     }
 
-    // Přeskočit již zpracované
-    const existujici = new Set(
-      (await prisma.navrhUkolu.findMany({ select: { zdrojId: true } }))
-        .map((n) => n.zdrojId).filter(Boolean) as string[]
-    );
+    // Přeskočit již zpracované — kontroluj návrhy i schválené úkoly
+    const [existujiciNavrhy, existujiciUkoly] = await Promise.all([
+      prisma.navrhUkolu.findMany({ select: { zdrojId: true } }),
+      prisma.ukol.findMany({ select: { zdrojId: true }, where: { zdrojId: { not: null } } }),
+    ]);
+    const existujici = new Set([
+      ...existujiciNavrhy.map((n) => n.zdrojId),
+      ...existujiciUkoly.map((u) => u.zdrojId),
+    ].filter(Boolean) as string[]);
     const nove = maily.filter((m) => !existujici.has(m.id));
 
     if (!nove.length) {
