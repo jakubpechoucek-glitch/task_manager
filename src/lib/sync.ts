@@ -98,15 +98,17 @@ export async function spustSync(): Promise<{ noveNavrhy: number; chyba?: string 
       getNoveUdalostiKalendare(),
     ]);
 
-    // Zkontroluj zdrojId v návrzích I v již schválených úkolech
-    const [existujiciNavrhy, existujiciUkoly] = await Promise.all([
+    // Zkontroluj zdrojId v návrzích, schválených úkolech i ignorovaných zdrojích
+    const [existujiciNavrhy, existujiciUkoly, ignorovane] = await Promise.all([
       prisma.navrhUkolu.findMany({ select: { zdrojId: true } }),
       prisma.ukol.findMany({ select: { zdrojId: true }, where: { zdrojId: { not: null } } }),
+      prisma.ignorovanyZdroj.findMany({ select: { zdrojId: true } }),
     ]);
 
     const existujiciZdrojIds = new Set([
       ...existujiciNavrhy.map((n: { zdrojId: string | null }) => n.zdrojId),
       ...existujiciUkoly.map((u: { zdrojId: string | null }) => u.zdrojId),
+      ...ignorovane.map((i: { zdrojId: string }) => i.zdrojId),
     ].filter(Boolean) as string[]);
 
     const [navrhyMailu, navrhyKalendare] = await Promise.all([

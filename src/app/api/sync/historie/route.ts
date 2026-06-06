@@ -18,13 +18,15 @@ export async function POST(req: NextRequest) {
     }
 
     // Přeskočit již zpracované — kontroluj návrhy i schválené úkoly
-    const [existujiciNavrhy, existujiciUkoly] = await Promise.all([
+    const [existujiciNavrhy, existujiciUkoly, ignorovane] = await Promise.all([
       prisma.navrhUkolu.findMany({ select: { zdrojId: true } }),
       prisma.ukol.findMany({ select: { zdrojId: true }, where: { zdrojId: { not: null } } }),
+      prisma.ignorovanyZdroj.findMany({ select: { zdrojId: true } }),
     ]);
     const existujici = new Set([
       ...existujiciNavrhy.map((n) => n.zdrojId),
       ...existujiciUkoly.map((u) => u.zdrojId),
+      ...ignorovane.map((i) => i.zdrojId),
     ].filter(Boolean) as string[]);
     const nove = maily.filter((m) => !existujici.has(m.id));
 

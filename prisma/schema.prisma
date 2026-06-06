@@ -32,6 +32,13 @@ model NavrhUkolu {
   vytvoreno DateTime @default(now())
 }
 
+model IgnorovanyZdroj {
+  id        Int      @id @default(autoincrement())
+  zdrojId   String   @unique
+  zdroj     String
+  vytvoreno DateTime @default(now())
+}
+
 model SyncLog {
   id         Int      @id @default(autoincrement())
   cas        DateTime @default(now())

@@ -28,6 +28,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+
+  // Najdi návrh před smazáním
+  const navrh = await prisma.navrhUkolu.findUnique({ where: { id: Number(id) } });
+
+  if (navrh?.zdrojId) {
+    // Ulož zdrojId jako ignorovaný — víc se nenabídne
+    await prisma.ignorovanyZdroj.upsert({
+      where: { zdrojId: navrh.zdrojId },
+      create: { zdrojId: navrh.zdrojId, zdroj: navrh.zdroj },
+      update: {},
+    });
+  }
+
   await prisma.navrhUkolu.delete({ where: { id: Number(id) } });
   return NextResponse.json({ ok: true });
 }
