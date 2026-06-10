@@ -6,9 +6,29 @@ function getAnthropic() {
   return new Anthropic({ apiKey: process.env.CLAUDE_API_KEY });
 }
 
-function parseJSON(raw: string) {
-  const text = raw.replace(/^```[a-z]*\n?/m, "").replace(/```\s*$/m, "").trim();
-  return JSON.parse(text);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseJSON(raw: string): any[] {
+  // Odstraň markdown fences
+  let text = raw.replace(/^```[a-z]*\n?/m, "").replace(/```\s*$/m, "").trim();
+  // Najdi první [ a poslední ] — ořízni případný šum kolem
+  const start = text.indexOf("[");
+  const end = text.lastIndexOf("]");
+  if (start === -1) return [];
+  if (end === -1) {
+    // JSON je uříznutý — zkus zachránit co je celé
+    text = text.slice(start);
+    // Najdi poslední kompletní objekt (ukončený })
+    const lastComplete = text.lastIndexOf("},");
+    if (lastComplete === -1) return [];
+    text = text.slice(0, lastComplete + 1) + "]";
+  } else {
+    text = text.slice(start, end + 1);
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    return [];
+  }
 }
 
 type Mail = { id: string; subject: string; from: string; to: string; snippet: string; date: string };
@@ -20,7 +40,7 @@ async function analyzujPrijatyeMaily(maily: Mail[]): Promise<NavrhVysledek[]> {
 
   const response = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [{
       role: "user", content: `Analyzuj příchozí emaily a rozhodni, zda každý vyžaduje akci.
 Uživatel žije střídavě v Praze (ČR) a Manile (PH).
@@ -52,7 +72,7 @@ async function analyzujOdeslaneMaily(maily: Mail[]): Promise<NavrhVysledek[]> {
 
   const response = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [{
       role: "user", content: `Analyzuj odeslané emaily a rozhodni, zda uživatel čeká na odpověď nebo akci od druhé strany.
 Uživatel žije střídavě v Praze (ČR) a Manile (PH).
@@ -84,7 +104,7 @@ async function analyzujKalendar(udalosti: Udalost[]): Promise<NavrhVysledek[]> {
 
   const response = await getAnthropic().messages.create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
+    max_tokens: 2048,
     messages: [{
       role: "user", content: `Analyzuj události z kalendáře a rozhodni, zda každá vyžaduje přípravu nebo akci.
 Uživatel žije střídavě v Praze (ČR) a Manile (PH).
@@ -133,8 +153,9 @@ export async function spustSync(): Promise<{ noveNavrhy: number; chyba?: string 
       getExistujiciZdrojIds(),
     ]);
 
-    const nove = (maily: Mail[]) => maily.filter((m) => !existujiciZdrojIds.has(m.id));
-    const noveUdalosti = udalosti.filter((u) => !existujiciZdrojIds.has(u.id));
+    const MAX_DAVKA = 15;
+    const nove = (maily: Mail[]) => maily.filter((m) => !existujiciZdrojIds.has(m.id)).slice(0, MAX_DAVKA);
+    const noveUdalosti = udalosti.filter((u) => !existujiciZdrojIds.has(u.id)).slice(0, MAX_DAVKA);
 
     const [navrhyPrijate, navrhyOdeslane, navrhyKalendar] = await Promise.all([
       analyzujPrijatyeMaily(nove(prijate)),
