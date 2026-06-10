@@ -50,20 +50,44 @@ export default function Dashboard() {
 
   const handleImportHistorie = async (dnu: number) => {
     setImportujuHistorii(true);
-    await fetch("/api/sync/historie", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dnu }),
-    });
-    await Promise.all([nactiNavrhy(), nactiSyncLog()]);
-    setImportujuHistorii(false);
+    try {
+      const res = await fetch("/api/sync/historie", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dnu }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Chyba importu: ${data.chyba || res.statusText}`);
+      } else {
+        alert(`Import dokončen: ${data.noveNavrhy ?? 0} nových návrhů (zpracováno ${data.zpracovanoMailu ?? 0} mailů)`);
+      }
+      await Promise.all([nactiNavrhy(), nactiSyncLog()]);
+    } catch (e) {
+      alert(`Chyba připojení: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setImportujuHistorii(false);
+    }
   };
 
   const handleSync = async () => {
     setSyncing(true);
-    await fetch("/api/sync", { method: "POST" });
-    await Promise.all([nactiNavrhy(), nactiSyncLog()]);
-    setSyncing(false);
+    try {
+      const res = await fetch("/api/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`Chyba synchronizace: ${data.chyba || res.statusText}`);
+      } else if (data.chyba) {
+        alert(`Sync selhal: ${data.chyba}`);
+      } else {
+        // Tichý úspěch — jen obnoví data
+      }
+      await Promise.all([nactiNavrhy(), nactiSyncLog()]);
+    } catch (e) {
+      alert(`Chyba připojení: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const handleUlozitUkol = async (data: {
